@@ -1,0 +1,5 @@
+# Disabled pylint warnings:
+# - bad-continuation: we let black take care of the formatting
+#
+[MESSAGES CONTROL]
+disable = bad-continuation

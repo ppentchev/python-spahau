@@ -28,6 +28,7 @@ import socket
 from typing import List
 
 from spahau import defs
+from spahau import response
 
 
 def get_hostname(cfg: defs.Config, address: defs.IPAddress) -> str:
@@ -36,7 +37,9 @@ def get_hostname(cfg: defs.Config, address: defs.IPAddress) -> str:
     return address.text_rev + "." + cfg.domain
 
 
-def query(cfg: defs.Config, address: defs.IPAddress) -> List[defs.IPAddress]:
+def query(
+    cfg: defs.Config, address: defs.IPAddress
+) -> List[response.Response]:
     """Send a query, parse the responses."""
     cfg.diag(f"Query for {address}")
     hostname = get_hostname(cfg, address)
@@ -52,6 +55,9 @@ def query(cfg: defs.Config, address: defs.IPAddress) -> List[defs.IPAddress]:
     result = [defs.IPAddress.parse(data[4][0]) for data in resp]
     errors = [addr for addr in result if addr.is_spamhaus_error]
     if errors:
-        return [errors[0]]
+        return [response.response_desc(errors[0])]
 
-    return sorted(set(result), key=lambda addr: addr.octets)
+    return [
+        response.response_desc(resp)
+        for resp in sorted(set(result), key=lambda addr: addr.octets)
+    ]

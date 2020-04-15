@@ -24,15 +24,23 @@
 """Build a response string out of an IPAddress response."""
 
 import dataclasses
+
+from typing import Optional
+
 from spahau import defs
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Response:
     """A decoded response from the Spamhaus RBL."""
 
     tag: str
     reason: str
+    address: Optional[defs.IPAddress] = None
+
+    def __str__(self) -> str:
+        """Provide a human-readable representation."""
+        return f"{self.address} - {self.tag} - {self.reason}"
 
 
 EXACT = {
@@ -81,19 +89,13 @@ def response_desc(address: defs.IPAddress) -> Response:
     """Return the Spamhaus description of the address."""
     match = EXACT.get(address.text)
     if match is not None:
-        return match
+        return dataclasses.replace(match, address=address)
 
     octets = address.octets
     match = DOMAINS.get(f"{octets[0]}.{octets[1]}.{octets[2]}.0")
     if match is not None:
-        return match
+        return dataclasses.replace(match, address=address)
 
-    return Response(tag="UNKNOWN", reason="unexpected Spamhaus response")
-
-
-def response_string(cfg: defs.Config, address: defs.IPAddress) -> str:
-    """Build a full response string."""
-
-    cfg.diag(f"response_string({address})")
-    resp = response_desc(address)
-    return f"{address} - {resp.tag} - {resp.reason}"
+    return Response(
+        tag="UNKNOWN", reason="unexpected Spamhaus response", address=address
+    )

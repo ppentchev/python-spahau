@@ -24,16 +24,20 @@
 """Main program: parse command-line arguments, do what is requested."""
 
 import argparse
+import dataclasses
+import json
 import sys
 
-from typing import Callable, Dict, List, Tuple  # noqa: H301
+from typing import Any, Callable, Dict, List, Tuple, Union  # noqa: H301
 
 from spahau import defs
 from spahau import query
 from spahau import response
 
 
-ConfigHandler = Callable[[defs.Config, defs.IPAddress], None]
+Result = Union[str, response.Response, List[response.Response]]
+
+ConfigHandler = Callable[[defs.Config, defs.IPAddress], Result]
 
 
 SELFTEST_DATA_DEFS: Dict[str, List[str]] = {
@@ -42,68 +46,51 @@ SELFTEST_DATA_DEFS: Dict[str, List[str]] = {
 }
 
 SELFTEST_DATA = {
-    defs.IPAddress.parse(name): [defs.IPAddress.parse(item) for item in value]
+    defs.IPAddress.parse(name): [
+        response.response_desc(defs.IPAddress.parse(item)) for item in value
+    ]
     for name, value in SELFTEST_DATA_DEFS.items()
 }
 
 
-def cmd_describe(cfg: defs.Config, address: defs.IPAddress) -> None:
+def cmd_describe(_cfg: defs.Config, address: defs.IPAddress) -> Result:
     """Describe the specified RBL return codes."""
-    print(response.response_string(cfg, address))
+    return response.response_desc(address)
 
 
-def cmd_show_hostname(cfg: defs.Config, address: defs.IPAddress) -> None:
+def cmd_show_hostname(cfg: defs.Config, address: defs.IPAddress) -> Result:
     """Build and display the hostname for the query."""
-    print(query.get_hostname(cfg, address))
+    return query.get_hostname(cfg, address)
 
 
-def cmd_selftest(cfg: defs.Config, address: defs.IPAddress) -> None:
+def cmd_selftest(cfg: defs.Config, address: defs.IPAddress) -> Result:
     """Run a self-test."""
     expected = SELFTEST_DATA.get(address)
     if expected is None:
-        sys.exit("Unknown selftest address '{address}'")
+        sys.exit(f"Unknown selftest address '{address}'")
 
-    stringified = " ".join(
-        f"'{response.response_string(cfg, resp)}'" for resp in expected
-    )
-    print(
-        f"Querying '{address}', expecting {len(expected)} "
-        f"responses: {stringified}"
-    )
+    if not cfg.json:
+        print(
+            f"Querying '{address}', expecting {len(expected)} responses: "
+            + " ".join(f"'{resp}'" for resp in expected)
+        )
 
     responses = query.query(cfg, address)
-    stringified = " ".join(
-        f"'{response.response_string(cfg, resp)}'" for resp in responses
-    )
-    print(f"...got {len(responses)} responses: {stringified}")
+    if not cfg.json:
+        print(
+            f"...got {len(responses)} responses: "
+            + " ".join(f"'{resp}'" for resp in responses)
+        )
+
     if responses != expected:
         sys.exit(f"Mismatch for '{address}'")
 
+    return responses
 
-def cmd_test(cfg: defs.Config, address: defs.IPAddress) -> None:
+
+def cmd_test(cfg: defs.Config, address: defs.IPAddress) -> Result:
     """Describe the specified RBL return codes."""
-    responses = query.query(cfg, address)
-    if not responses:
-        print(
-            f"The IP address: {address} is NOT found in "
-            f"the Spamhaus blacklists."
-        )
-        return
-
-    if responses[0].is_spamhaus_error:
-        print(
-            f"Could not obtain a response for {address}: "
-            + response.response_string(cfg, responses[0])
-        )
-        return
-
-    stringified = " ".join(
-        f"'{response.response_string(cfg, resp)}'" for resp in responses
-    )
-    print(
-        f"The IP address: {address} is found in the following "
-        f"Spamhaus public IP zone: {stringified}"
-    )
+    return query.query(cfg, address)
 
 
 def parse_arguments() -> Tuple[defs.Config, ConfigHandler]:
@@ -127,6 +114,9 @@ def parse_arguments() -> Tuple[defs.Config, ConfigHandler]:
         "-H",
         action="store_true",
         help="only output the RBL hostnames, do not send queries",
+    )
+    parser.add_argument(
+        "--json", "-j", action="store_true", help="display JSON output"
     )
     parser.add_argument(
         "--selftest",
@@ -167,6 +157,7 @@ def parse_arguments() -> Tuple[defs.Config, ConfigHandler]:
         defs.Config(
             addresses=[defs.IPAddress.parse(item) for item in args.addresses],
             domain=str(args.domain),
+            json=bool(args.json),
             verbose=bool(args.verbose),
         ),
         handler,
@@ -176,8 +167,47 @@ def parse_arguments() -> Tuple[defs.Config, ConfigHandler]:
 def main() -> None:
     """Parse command-line arguments, do cri... err, things."""
     cfg, func = parse_arguments()
+
+    data: Dict[str, Any] = {}
     for address in cfg.addresses:
-        func(cfg, address)
+        value = func(cfg, address)
+        cfg.diag(f"{address}: got {value}")
+        if cfg.json:
+            if not value or isinstance(value, str):
+                data[address.text] = value
+            elif isinstance(value, response.Response):
+                data[address.text] = dataclasses.asdict(value)
+            else:
+                data[address.text] = [
+                    dataclasses.asdict(item) for item in value
+                ]
+            continue
+
+        if isinstance(value, (str, response.Response)):
+            print(value)
+            continue
+
+        assert isinstance(value, list)
+        if not value:
+            print(
+                f"The IP address: {address} is NOT found in "
+                f"the Spamhaus blacklists."
+            )
+            continue
+
+        assert all(isinstance(item, response.Response) for item in value)
+        if value and value[0].tag == "ERROR":
+            print(f"Could not obtain a response for {address}: {value[0]}")
+            continue
+
+        stringified = " ".join(f"'{resp}'" for resp in value)
+        print(
+            f"The IP address: {address} is found in the following "
+            f"Spamhaus public IP zone: {stringified}"
+        )
+
+    if cfg.json:
+        print(json.dumps(data, indent=2))
 
 
 if __name__ == "__main__":

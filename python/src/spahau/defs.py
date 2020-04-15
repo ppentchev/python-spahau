@@ -95,6 +95,7 @@ class Config:
 
     addresses: List[IPAddress]
     domain: str
+    json: bool
     verbose: bool
 
     def diag(self, msg: str) -> None:
