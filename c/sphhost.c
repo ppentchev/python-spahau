@@ -41,7 +41,7 @@ char *sph_get_hostname(const char *address)
 {
 	debug("About to convert '%s' to an RBL hostname for '%s'\n",
 	    address, rbl_domain);
-	unsigned char ads[4];
+	uint8_t ads[4];
 	const int pnres = inet_pton(AF_INET, address, &ads);
 	if (pnres == 0) {
 		warnx("Invalid address '%s'", address);
