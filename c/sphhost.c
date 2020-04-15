@@ -32,27 +32,50 @@
 
 #include <err.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 #include "spahau.h"
 #include "sphhost.h"
+
+static bool
+address_to_bytes(const char * const address, uint8_t * const bytes)
+{
+	const int pnres = inet_pton(AF_INET, address, bytes);
+	if (pnres == 0) {
+		warnx("Invalid address '%s'", address);
+		return false;
+	} else if (pnres != 1) {
+		warnx("Internal inet_pton() error for '%s'", address);
+		return false;
+	}
+	/* 'bytes' is in network byte order, so we can do this... */
+	debug("- converted it to %d.%d.%d.%d\n",
+	    bytes[0], bytes[1], bytes[2], bytes[3]);
+	return true;
+}
+
+bool
+sph_pton(const char * const address, uint32_t * const result)
+{
+	debug("About to convert '%s' into a network-byte-order value\n",
+	    address);
+	uint8_t ads[4];
+	if (!address_to_bytes(address, ads))
+		return false;
+
+	*result = (ads[0] << 24) | (ads[1] << 16) | (ads[2] << 8) | ads[3];
+	debug("- got %08X\n", *result);
+	return true;
+}
 
 char *sph_get_hostname(const char *address)
 {
 	debug("About to convert '%s' to an RBL hostname for '%s'\n",
 	    address, rbl_domain);
 	uint8_t ads[4];
-	const int pnres = inet_pton(AF_INET, address, &ads);
-	if (pnres == 0) {
-		warnx("Invalid address '%s'", address);
+	if (!address_to_bytes(address, ads))
 		return NULL;
-	} else if (pnres != 1) {
-		warnx("Internal inet_pton() error for '%s'", address);
-		return NULL;
-	}
-	/* 'ads' is in network byte order, so we can do this... */
-	debug("- converted it to %d.%d.%d.%d\n",
-	    ads[0], ads[1], ads[2], ads[3]);
 
 	/* We don't really need to reverse it, just build the hostname. */
 	char *hostname;

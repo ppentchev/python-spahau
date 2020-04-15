@@ -25,8 +25,8 @@
 # SUCH DAMAGE.
 
 PROG=		spahau
-SRCS=		spahau.c sphhost.c
-OBJS=		spahau.o sphhost.o
+SRCS=		spahau.c sphhost.c sphresponse.c
+OBJS=		spahau.o sphhost.o sphresponse.o
 
 RM?=		rm -f
 

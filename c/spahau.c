@@ -24,9 +24,6 @@
  * SUCH DAMAGE.
  */
 
-/* For asprintf(3)... */
-#define _GNU_SOURCE
-
 #include <sys/types.h>
 #include <sys/socket.h>
 
@@ -41,6 +38,7 @@
 
 #include "spahau.h"
 #include "sphhost.h"
+#include "sphresponse.h"
 
 #define VERSION_STRING	"0.1.0.dev2"
 
@@ -77,11 +75,12 @@ static void
 usage(const bool _ferr)
 {
 	const char * const s =
-	    "Usage:\tspahau [-HNv] [-d rbl.domain] address...\n"
+	    "Usage:\tspahau [-DHNv] [-d rbl.domain] address...\n"
 	    "\tspahau [-v] [-d rbl.domain] -T address...\n"
 	    "\tspahau -V | -h | --version | --help\n"
 	    "\tspahau --features\n"
 	    "\n"
+	    "\t-D\tdescribe the specified RBL return codes/addresses\n"
 	    "\t-d\tspecify the RBL domain to test against (default: "
 	    RBL_DOMAIN ")\n"
 	    "\t-H\tonly output the RBL hostnames, do not send queries\n"
@@ -218,115 +217,6 @@ query(const char * const address)
 	return response;
 }
 
-static const char *
-response_string_desc(uint32_t response)
-{
-	debug("response_string() invoked for %08X\n", response);
-
-	switch (response) {
-		case 0x7F000002:
-			return "SBL - Spamhaus SBL Data";
-
-		case 0x7F000003:
-			return "SBL - Spamhaus SBL CSS Data";
-
-		case 0x7F000004:
-			return "XBL - CBL Data";
-
-		case 0x7F000009:
-			return "SBL - Spamhaus DROP/EDROP Data";
-
-		case 0x7F00000A:
-			return "PBL - ISP Maintained";
-
-		case 0x7F00000B:
-			return "PBL - Spamhaus Maintained";
-
-		/**************/
-
-		case 0x7F000102:
-			return "DBL - spam domain";
-
-		case 0x7F000104:
-			return "DBL - phish domain";
-
-		case 0x7F000105:
-			return "DBL - malware domain";
-
-		case 0x7F000106:
-			return "DBL - Internet C&C domain";
-
-		case 0x7F000166:
-			return "DBL - abused legit spam";
-
-		case 0x7F000167:
-			return "DBL - abused spammed redirector domain";
-
-		case 0x7F000168:
-			return "DBL - abused legit phish";
-
-		case 0x7F000169:
-			return "DBL - abused legit malware";
-
-		case 0x7F00016A:
-			return "DBL - abused legit botnet C&C";
-
-		case 0x7F0001FF:
-			return "DBL - IP queries prohibited!";
-
-		/**************/
-
-		case 0x7FFFFFFC:
-			return "ERROR - Typing error in DNSBL name";
-
-		case 0x7FFFFFFE:
-			return
-			    "ERROR - Anonymous query through public resolver";
-
-		case 0x7FFFFFFF:
-			return "ERROR - Excessive number of queries";
-
-		default:
-			/* good practices and stuff */
-			break;
-	}
-
-	switch (response & 0xFFFFFF00) {
-		case 0x7F000000:
-			return "SBL - Spamhaus IP Blocklists";
-
-		case 0x7F000100:
-			return "DBL - Spamhaus Domain Blocklists";
-
-		case 0x7F000200:
-			return "ZRD - Spamhaus Zero Reputation Domains list";
-
-		case 0x7FFFFF00:
-			return "ERROR - could not obtain a Spamhaus response";
-
-		default:
-			/* good practices and stuff */
-			break;
-	}
-
-	return "UNKNOWN - unexpected Spamhaus response";
-}
-
-static char *
-response_string(const uint32_t response)
-{
-	char *desc;
-	const int res = asprintf(&desc, "%u.%u.%u.%u - %s",
-	    response >> 24, (response >> 16) & 0xFF,
-	    (response >> 8) & 0xFF, response & 0xFF,
-	    response_string_desc(response));
-	if (res == -1) {
-		warn("Could not allocate memory");
-		return NULL;
-	}
-	return desc;
-}
-
 static void
 test(const char * const address)
 {
@@ -435,6 +325,23 @@ show_hostname(const char * const address)
 	free(host);
 }
 
+static void
+show_response(const char * const address)
+{
+	uint32_t result;
+	if (!sph_pton(address, &result)) {
+		warnx("Could not parse '%s'", address);
+		return;
+	}
+
+	char * const resp = response_string(result);
+	if (resp == NULL)
+		return;
+
+	puts(resp);
+	free(resp);
+}
+
 int
 main(int argc, char * const argv[])
 {
@@ -442,8 +349,12 @@ main(int argc, char * const argv[])
 	int ch;
 	void (*testfunc)(const char *) = test;
 
-	while (ch = getopt(argc, argv, "d:HhTVv-:"), ch != -1)
+	while (ch = getopt(argc, argv, "Dd:HhTVv-:"), ch != -1)
 		switch (ch) {
+			case 'D':
+				testfunc = show_response;
+				break;
+
 			case 'd':
 				rbl_domain = optarg;
 				break;

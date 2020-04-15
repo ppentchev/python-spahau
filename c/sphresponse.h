@@ -1,5 +1,5 @@
-#ifndef INCLUDED_SPH_HOST_H
-#define INCLUDED_SPH_HOST_H
+#ifndef INCLUDED_SPH_RESPONSE_H
+#define INCLUDED_SPH_RESPONSE_H
 
 /**
  * Copyright (c) 2020  Peter Pentchev <roam@ringlet.net>
@@ -27,8 +27,6 @@
  * SUCH DAMAGE.
  */
 
-bool sph_pton(const char *address, uint32_t *result);
-
-char *sph_get_hostname(const char *address);
+char *response_string(uint32_t response);
 
 #endif
