@@ -74,3 +74,40 @@ In addition to these, the `-v` command-line argument makes `spahau` be
 much more verbose and output lots of diagnostic messages to its standard
 error stream; this does not affect the text sent to the standard output
 stream, so it may still be parsed as usual.
+
+## Running the tests
+
+There are three kinds of tests for the `spahau` utility:
+
+### Self-tests within the `spahau` implementation
+
+Both the C and Python implementations of `spahau` contain a built-in
+self-test that queries the Spamhaus RBL for some well-known fictitious
+entries meant for testing and verifies the obtained results. These tests
+may be run by invoking the `spahau` utility (or the `python/run_spahau.sh`
+shell script) with the `-T` command-line option.
+
+### TAP tests
+
+In the source tree, there is a TAP-compatible set of tests written in
+Perl in the t/ directory. The `prove` command (usually installed as part
+of Perl) and the Perl Test::Command module are needed to run it.
+
+It may be run in two ways:
+
+- for a single implementation: set the `TEST_PROG` environment variable to
+  the full path of a single executable file that implements the `spahau`
+  utility's command-line interface and run `prove t`
+
+- for all the implementations: run `make test` from the top-level source
+  directory; this will build the C implementation, package up the Python one
+  just to make sure that some files' syntax is correct, and then run
+  the TAP suite for both `c/spahau` and `python/run_spahau.sh`
+
+### Syntax and type checks for the Python implementation
+
+The Python implementation has a `tox.ini` file containing definitions for
+testing environments that will run several syntax and type checkers on
+the Python source code. This test suite is invoked by running the `tox`
+utility (usually available in a package called `tox` or `python3-tox` or
+similar) in the `python/` subdirectory where the `tox.ini` file resides.
