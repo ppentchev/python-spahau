@@ -82,15 +82,19 @@ static struct selftest_item selftest_data[] = {
 
 #define IS_SPAMHAUS_ERROR(resp)	(((resp) & 0xFFFFFF00) == 0x7FFFFF00)
 
+const char *rbl_domain = RBL_DOMAIN;
+
 static void
 usage(const bool _ferr)
 {
 	const char * const s =
-	    "Usage:\tspahau [-Nv] address...\n"
-	    "\tspahau [-v] -T address...\n"
+	    "Usage:\tspahau [-Nv] [-d rbl.domain] address...\n"
+	    "\tspahau [-v] [-d rbl.domain] -T address...\n"
 	    "\tspahau -V | -h | --version | --help\n"
 	    "\tspahau --features\n"
 	    "\n"
+	    "\t-d\tspecify the RBL domain to test against (default: "
+	    RBL_DOMAIN ")\n"
 	    "\t-h\tdisplay program usage information and exit\n"
 	    "\t-T\trun a self test: try to obtain some expected responses\n"
 	    "\t-V\tdisplay program version information and exit\n"
@@ -176,7 +180,7 @@ query(const char * const address)
 	/* We don't really need to reverse it, just build the hostname. */
 	char *hostname;
 	if (asprintf(&hostname, "%d.%d.%d.%d.%s",
-	    ads[3], ads[2], ads[1], ads[0], RBL_DOMAIN) == -1) {
+	    ads[3], ads[2], ads[1], ads[0], rbl_domain) == -1) {
 		warn("Could not allocate memory for the hostname");
 		return NULL;
 	}
@@ -453,8 +457,12 @@ main(int argc, char * const argv[])
 	int ch;
 	void (*testfunc)(const char *) = test;
 
-	while (ch = getopt(argc, argv, "hTVv-:"), ch != -1)
+	while (ch = getopt(argc, argv, "d:hTVv-:"), ch != -1)
 		switch (ch) {
+			case 'd':
+				rbl_domain = optarg;
+				break;
+
 			case 'h':
 				hflag = true;
 				break;

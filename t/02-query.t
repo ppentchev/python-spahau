@@ -14,7 +14,7 @@ if (!defined $prog) {
 	BAIL_OUT "No TEST_PROG in the environment";
 }
 
-plan tests => 35;
+plan tests => 41;
 
 my @cmdstr = ($prog);
 my $cmd = Test::Command->new(cmd => \@cmdstr);
@@ -109,4 +109,20 @@ $cmd->stdout_like(
     qr{The IP address: 127\.0\.0\.2 is found.*'127\.0\.0\.10 - PBL - ISP Maintained'},
     "'@cmdstr' found 127.0.0.2 in the ISP-maintained list");
 $cmd->stderr_isnt_eq('', "'@cmdstr' produced some diagnostic output");
+usleep(500000);
+
+@cmdstr = ($prog, '-d', 'nosuchsbl.ringlet.net', '127.0.0.2');
+$cmd = Test::Command->new(cmd => \@cmdstr);
+$cmd->exit_is_num(0, "'@cmdstr' completed successfully");
+$cmd->stdout_isnt_eq('', "'@cmdstr' produced some output");
+$cmd->stdout_like(
+    qr{The IP address: 127\.0\.0\.2 is NOT found in the Spamhaus blacklists},
+    "'@cmdstr' did not find 127.0.0.1");
+$cmd->stdout_unlike(
+    qr{The IP address: 127\.0\.0\.2 is found},
+    "'@cmdstr' really did not find 127.0.0.2");
+$cmd->stdout_unlike(
+    qr{The IP address: 127\.0\.0\.1 is},
+    "'@cmdstr' did not report anything about 127.0.0.1");
+$cmd->stderr_is_eq('', "'@cmdstr' did not output any warnings or errrors");
 usleep(500000);
