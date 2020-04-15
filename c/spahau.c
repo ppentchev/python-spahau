@@ -53,7 +53,7 @@
 #endif
 #endif
 
-#define VERSION_STRING	"0.1.0.dev1"
+#define VERSION_STRING	"0.1.0.dev2"
 
 #define RBL_DOMAIN "zen.spamhaus.org"
 
@@ -87,7 +87,7 @@ usage(const bool _ferr)
 {
 	const char * const s =
 	    "Usage:\tspahau [-Nv] address...\n"
-	    "\tspahau [-v] -T\n"
+	    "\tspahau [-v] -T address...\n"
 	    "\tspahau -V | -h | --version | --help\n"
 	    "\tspahau --features\n"
 	    "\n"
@@ -388,10 +388,13 @@ test(const char * const address)
 }
 
 static void
-selftest(void)
+selftest(const char * const address)
 {
 	for (size_t idx = 0; idx < SELFTEST_COUNT; idx++) {
 		const struct selftest_item * const item = &selftest_data[idx];
+		if (strcmp(address, item->address) != 0)
+			continue;
+
 		const uint32_t expected_count = item->result[0];
 		if (expected_count >= RESPONSE_SIZE)
 			errx(1,
@@ -436,17 +439,20 @@ selftest(void)
 
 		if (mismatch)
 			errx(1, "Mismatch for %s", item->address);
+
+		return;
 	}
 
-	puts("Seems fine");
+	errx(1, "No selftest definition for address '%s'", address);
 }
 
 int
 main(int argc, char * const argv[])
 {
 	bool hflag = false, Vflag = false, show_features = false;
-	bool do_selftest = false;
 	int ch;
+	void (*testfunc)(const char *) = test;
+
 	while (ch = getopt(argc, argv, "hTVv-:"), ch != -1)
 		switch (ch) {
 			case 'h':
@@ -454,7 +460,7 @@ main(int argc, char * const argv[])
 				break;
 
 			case 'T':
-				do_selftest = true;
+				testfunc = selftest;
 				break;
 
 			case 'V':
@@ -494,19 +500,10 @@ main(int argc, char * const argv[])
 	argc -= optind;
 	argv += optind;
 
-	if (do_selftest) {
-		if (argc > 0)
-			usage(true);
-
-		selftest();
-		return 0;
-	}
-
 	if (argc == 0)
 		usage(true);
 
-	for (size_t i = 0; i < (size_t)argc; i++) {
-		test(argv[i]);
-	}
+	for (size_t i = 0; i < (size_t)argc; i++)
+		testfunc(argv[i]);
 	return (0);
 }

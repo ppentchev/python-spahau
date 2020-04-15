@@ -55,7 +55,11 @@ clean:
 		${RM} ${PROG} ${OBJS}
 
 test:		all
-		./${PROG} -v -T
+		! ./${PROG} -T
+		! ./${PROG} -T 8.8.8.8
+		./${PROG} -v -T 127.0.0.1 127.0.0.2
+		./${PROG} -T 127.0.0.1
+		./${PROG} -T 127.0.0.2
 
 ${PROG}:	${OBJS}
 
