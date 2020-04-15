@@ -25,8 +25,8 @@
 # SUCH DAMAGE.
 
 PROG=		spahau
-SRCS=		spahau.c
-OBJS=		spahau.o
+SRCS=		spahau.c sphhost.c
+OBJS=		spahau.o sphhost.o
 
 RM?=		rm -f
 
@@ -62,5 +62,6 @@ test:		all
 		./${PROG} -T 127.0.0.2
 
 ${PROG}:	${OBJS}
+		${CC} ${LDFLAGS} -o ${PROG} ${OBJS}
 
 .PHONY:		all clean test

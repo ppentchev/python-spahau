@@ -32,9 +32,6 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
-
 #include <err.h>
 #include <inttypes.h>
 #include <netdb.h>
@@ -45,13 +42,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#ifndef __printflike
-#if defined(__GNUC__) && __GNUC__ >= 3
-#define __printflike(x, y)	__attribute__((format(printf, (x), (y))))
-#else
-#define __printflike(x, y)
-#endif
-#endif
+#include "spahau.h"
+#include "sphhost.h"
 
 #define VERSION_STRING	"0.1.0.dev2"
 
@@ -88,13 +80,14 @@ static void
 usage(const bool _ferr)
 {
 	const char * const s =
-	    "Usage:\tspahau [-Nv] [-d rbl.domain] address...\n"
+	    "Usage:\tspahau [-HNv] [-d rbl.domain] address...\n"
 	    "\tspahau [-v] [-d rbl.domain] -T address...\n"
 	    "\tspahau -V | -h | --version | --help\n"
 	    "\tspahau --features\n"
 	    "\n"
 	    "\t-d\tspecify the RBL domain to test against (default: "
 	    RBL_DOMAIN ")\n"
+	    "\t-H\tonly output the RBL hostnames, do not send queries\n"
 	    "\t-h\tdisplay program usage information and exit\n"
 	    "\t-T\trun a self test: try to obtain some expected responses\n"
 	    "\t-V\tdisplay program version information and exit\n"
@@ -117,7 +110,7 @@ features(void)
 	puts("Features: spahau=" VERSION_STRING);
 }
 
-static void
+void
 debug(const char * const fmt, ...)
 {
 	va_list v;
@@ -164,31 +157,12 @@ static uint32_t *
 query(const char * const address)
 {
 	debug("About to query %s\n", address);
-	unsigned char ads[4];
-	const int pnres = inet_pton(AF_INET, address, &ads);
-	if (pnres == 0) {
-		warnx("Invalid address '%s'", address);
-		return NULL;
-	} else if (pnres != 1) {
-		warnx("Internal inet_pton() error for '%s'", address);
-		return NULL;
-	}
-	/* 'ads' is in network byte order, so we can do this... */
-	debug("- converted it to %d.%d.%d.%d\n",
-	    ads[0], ads[1], ads[2], ads[3]);
-
-	/* We don't really need to reverse it, just build the hostname. */
-	char *hostname;
-	if (asprintf(&hostname, "%d.%d.%d.%d.%s",
-	    ads[3], ads[2], ads[1], ads[0], rbl_domain) == -1) {
-		warn("Could not allocate memory for the hostname");
-		return NULL;
-	}
-	debug("- about to query %s\n", hostname);
+	char * const hostname = sph_get_hostname(address);
 
 	uint32_t * const response = malloc(RESPONSE_SIZE * sizeof(*response));
 	if (response == NULL) {
 		warn("Could not allocate memory for the response");
+		free(hostname);
 		return NULL;
 	}
 
@@ -198,12 +172,15 @@ query(const char * const address)
 	const int res = getaddrinfo(hostname, NULL, &hints, &resp);
 	if (res == EAI_NONAME) {
 		response[0] = 0;
+		free(hostname);
 		return response;
 	}
 	if (res != 0) {
 		warnx("Could not query '%s': %s", hostname, gai_strerror(res));
+		free(hostname);
 		return NULL;
 	}
+	free(hostname);
 
 	size_t pos;
 	for (pos = 1; pos < RESPONSE_SIZE && resp != NULL;
@@ -236,7 +213,7 @@ query(const char * const address)
 			return response;
 		}
 	}
-	debug("out of the loop with pos %u\n", pos);
+	debug("out of the loop with pos %zu\n", pos);
 	response[0] = pos - 1;
 
 	if (response[0] > 1)
@@ -450,6 +427,17 @@ selftest(const char * const address)
 	errx(1, "No selftest definition for address '%s'", address);
 }
 
+static void
+show_hostname(const char * const address)
+{
+	char * const host = sph_get_hostname(address);
+	if (host == NULL)
+		return;
+
+	printf("%s\n", host);
+	free(host);
+}
+
 int
 main(int argc, char * const argv[])
 {
@@ -457,10 +445,14 @@ main(int argc, char * const argv[])
 	int ch;
 	void (*testfunc)(const char *) = test;
 
-	while (ch = getopt(argc, argv, "d:hTVv-:"), ch != -1)
+	while (ch = getopt(argc, argv, "d:HhTVv-:"), ch != -1)
 		switch (ch) {
 			case 'd':
 				rbl_domain = optarg;
+				break;
+
+			case 'H':
+				testfunc = show_hostname;
 				break;
 
 			case 'h':
